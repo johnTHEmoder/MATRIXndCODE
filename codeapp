@@ -1,0 +1,271 @@
+//this file contain android developed code with 4 major files.
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:padding="16dp"
+        android:orientation="vertical">
+
+        <TextView
+            android:text="Welcome to MATRkoin"
+            android:textSize="24sp"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
+            android:paddingBottom="16dp"/>
+
+        <EditText
+            android:id="@+id/username"
+            android:hint="Username"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
+
+        <EditText
+            android:id="@+id/password"
+            android:hint="Password"
+            android:inputType="numberPassword"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
+
+        <Button
+            android:id="@+id/login_btn"
+            android:text="Login"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"/>
+
+        <!-- Action section (hidden until login) -->
+        <LinearLayout
+            android:id="@+id/action_layout"
+            android:visibility="gone"
+            android:orientation="vertical"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp">
+
+            <Spinner
+                android:id="@+id/action_spinner"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+
+            <EditText
+                android:id="@+id/amount"
+                android:hint="Amount (if needed)"
+                android:inputType="number"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"/>
+
+            <Button
+                android:id="@+id/action_btn"
+                android:text="Submit"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"/>
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/result_text"
+            android:text="Result will appear here"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:textColor="#000000"
+            android:textSize="16sp" />
+
+    </LinearLayout>
+</ScrollView>
+
+
+//java mainactivity
+package com.example.matrkoin;
+
+import android.os.Bundle;
+import android.view.View;
+import android.widget.*;
+import androidx.appcompat.app.AppCompatActivity;
+
+public class MainActivity extends AppCompatActivity {
+
+    // Native method declarations
+    static {
+        System.loadLibrary("native-lib");
+    }
+
+    public native boolean loginUser(String user, int pass);
+    public native String performAction(int action, int amount);
+
+    // UI components
+    EditText username, password, amountInput;
+    Button loginBtn, actionBtn;
+    Spinner actionSpinner;
+    TextView resultView;
+    LinearLayout actionLayout;
+
+    boolean isLoggedIn = false;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+
+        // Linking views
+        username = findViewById(R.id.username);
+        password = findViewById(R.id.password);
+        amountInput = findViewById(R.id.amount);
+        loginBtn = findViewById(R.id.login_btn);
+        actionBtn = findViewById(R.id.action_btn);
+        actionSpinner = findViewById(R.id.action_spinner);
+        resultView = findViewById(R.id.result_text);
+        actionLayout = findViewById(R.id.action_layout);
+
+        // Populate spinner
+        String[] actions = {"Withdraw", "Deposit", "Show Balance"};
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, actions);
+        actionSpinner.setAdapter(adapter);
+
+        // Login button click
+        loginBtn.setOnClickListener(v -> {
+            String user = username.getText().toString();
+            String passText = password.getText().toString();
+
+            if (user.isEmpty() || passText.isEmpty()) {
+                resultView.setText("❌ Please enter both username and password.");
+                return;
+            }
+
+            int pass;
+            try {
+                pass = Integer.parseInt(passText);
+            } catch (NumberFormatException e) {
+                resultView.setText("❌ Password must be a number.");
+                return;
+            }
+
+            boolean result = loginUser(user, pass);
+            if (result) {
+                isLoggedIn = true;
+                Toast.makeText(this, "✅ Login successful!", Toast.LENGTH_SHORT).show();
+                username.setVisibility(View.GONE);
+                password.setVisibility(View.GONE);
+                loginBtn.setVisibility(View.GONE);
+                actionLayout.setVisibility(View.VISIBLE);
+            } else {
+                resultView.setText("❌ Login failed. Try again.");
+            }
+        });
+
+        // Action button click
+        actionBtn.setOnClickListener(v -> {
+            if (!isLoggedIn) return;
+
+            int action = actionSpinner.getSelectedItemPosition() + 1;
+            int amount = 0;
+            if (action != 3) {
+                amount = Integer.parseInt(amountInput.getText().toString());
+            }
+
+            String result = performAction(action, amount);
+            resultView.setText(result);
+        });
+    }
+}
+
+
+//cpp file
+#include <jni.h>
+#include <string>
+
+using namespace std;
+
+// Simplified User Class
+class User {
+public:
+    string username = "vivek";
+    int password = 1234;
+    float balance = 100000;
+
+    string show() {
+        return "Username: " + username + "\nBalance: ₹" + to_string(balance);
+    }
+};
+
+// Global user object (simulating a session)
+static User currentUser;
+
+// JNI Login Method
+extern "C"
+JNIEXPORT jboolean JNICALL
+Java_com_example_matrKoin_MainActivity_loginUser(
+        JNIEnv *env,
+        jobject /* this */,
+        jstring juser,
+        jint jpass) {
+
+    const char* nativeUser = env->GetStringUTFChars(juser, nullptr);
+    string user(nativeUser);
+    env->ReleaseStringUTFChars(juser, nativeUser);
+
+    if (user == currentUser.username && jpass == currentUser.password) {
+        return JNI_TRUE; // Login successful
+    } else {
+        return JNI_FALSE; // Login failed
+    }
+}
+
+// JNI Action Method (Withdraw/Deposit/Show Balance)
+extern "C"
+JNIEXPORT jstring JNICALL
+Java_com_example_matrKoin_MainActivity_performAction(
+        JNIEnv *env,
+        jobject /* this */,
+        jint action,
+        jint amount) {
+
+    string result;
+
+    if (action == 1) { // Withdraw
+        if (amount <= currentUser.balance) {
+            currentUser.balance -= amount;
+            result = "Withdrawn: ₹" + to_string(amount);
+        } else {
+            result = "Insufficient balance!";
+        }
+    } else if (action == 2) { // Deposit
+        currentUser.balance += amount;
+        result = "Deposited: ₹" + to_string(amount);
+    } else if (action == 3) { // Show Balance
+        result = currentUser.show();
+    } else {
+        result = "Invalid action!";
+    }
+
+    return env->NewStringUTF(result.c_str());
+}
+
+
+//cmake list
+
+cmake_minimum_required(VERSION 3.4.1)
+
+# Specifies the minimum required version of CMake and the project.
+project("matrKoin")
+
+# Specifies the path to the native library.
+add_library( native-lib
+        SHARED
+        src/main/cpp/native-lib.cpp )
+
+# Links the native library with the required Android libraries.
+find_library( log-lib
+        log )
+
+# Link the native library with Android log library
+target_link_libraries( native-lib
+        ${log-lib} )
+
+
